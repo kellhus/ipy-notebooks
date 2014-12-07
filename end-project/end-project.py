@@ -62,8 +62,8 @@ def plot_averaged_image(stim_rates, low, high, title):
     ax1.hist(avg_image[...,1].flatten(), 256, range=(0, 254), fc='g', histtype='step')
     ax1.hist(avg_image[...,2].flatten(), 256, range=(0, 254), fc='r', histtype='step')
     ax1.set_title('Histogram of Image Channels')
-    ax1.set_xlabel('Bins')
-    ax1.set_ylabel('Pixel count')
+    ax1.set_xlabel('Bins, R/G/B values')
+    ax1.set_ylabel('Pixel count, n')
     ax1.set_xlim(100, 254)
 
     plt.tight_layout()
