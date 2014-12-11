@@ -5,6 +5,10 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import pandas as pd
 import PIL
+import colorsys
+import scipy
+import scipy.misc
+import scipy.cluster
 
 
 def load_data(files):
@@ -22,6 +26,30 @@ def add_response_rates(df):
     df['rates'] = df[['spk_times', 'stimon']].apply(lambda x: get_rate(x[0], x[1] + start, x[1] + stop), axis=1)
     return df
 
+def add_dominant_HSV_values(df):
+    stim_names = df['stim_names']
+    H, S, V = [], [], []
+    for stim in stim_names:
+        im = 'data/stimuli/' + stim + '.png'
+        image = PIL.Image.open(im)
+        ar = scipy.misc.fromimage(image)[:,:,0:3]
+        shape = ar.shape
+        ar = ar.reshape(scipy.product(shape[:2]), shape[2])
+        codes, dist = scipy.cluster.vq.kmeans(ar, 5)
+        vecs, dist = scipy.cluster.vq.vq(ar, codes)
+        counts, bins = scipy.histogram(vecs, len(codes))
+        index_max = np.argpartition(counts, 1)[1]
+        peak = codes[index_max]
+        hsv = colorsys.rgb_to_hsv(*[v / 255 for v in peak])
+        H.append(hsv[0])
+        S.append(hsv[1])
+        V.append(hsv[2])
+
+    df['H'] = H
+    df['S'] = S
+    df['V'] = V
+
+    return df
 
 def get_rate(spk_times, start, stop):
     spk_count = np.count_nonzero((spk_times < stop) & (spk_times >= start))
@@ -69,3 +97,26 @@ def plot_averaged_image(stim_rates, low, high, title):
     plt.tight_layout()
 
     # return stimuli
+
+def plot_HSV_scatterplots(df):
+    plt.style.use('ggplot')
+    plt.figure(figsize=(8, 8))
+    plt.subplot(3, 1, 1)
+    plt.scatter(df.H, df.rates)
+    plt.title('Hue vs Neural Response Rate')
+    plt.xlabel('Hue (unitless)')
+    plt.ylabel('Rate (spikes/s)')
+
+    plt.subplot(3, 1, 2)
+    plt.scatter(df.S, df.rates)
+    plt.title('Saturation vs Neural Response Rate')
+    plt.xlabel('Saturation (unitless)')
+    plt.ylabel('Rate (spikes/s)')
+
+    plt.subplot(3, 1, 3)
+    plt.scatter(df.V, df.rates)
+    plt.title('Value vs Neural Response Rate')
+    plt.xlabel('Value (unitless)')
+    plt.ylabel('Rate (spikes/s)')
+
+    plt.tight_layout()
