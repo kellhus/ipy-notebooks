@@ -10,7 +10,6 @@ import scipy
 import scipy.misc
 import scipy.cluster
 
-
 def load_data(files):
     data_dir = 'data/'
     data = pd.concat([pd.DataFrame(np.load(data_dir + filename)[()])
@@ -23,12 +22,15 @@ def load_data(files):
 
 def add_response_rates(df):
     start, stop = 100, 200
-    df['rates'] = df[['spk_times', 'stimon']].apply(lambda x: get_rate(x[0], x[1] + start, x[1] + stop), axis=1)
+    f = lambda x: get_rate(x[0], x[1] + start, x[1] + stop)
+    df['rates'] = df[['spk_times', 'stimon']].apply(f, axis=1)
     return df
 
-def add_dominant_HSV_values(df):
-    stim_names = df['stim_names']
-    H, S, V = [], [], []
+def get_dominant_HSL_values(stim_rates):
+    stim_hsl, stim_rgb = {}, {}
+    df = pd.DataFrame()
+    stim_names = list(stim_rates.keys())
+    stim_rates = stim_rates.values
     for stim in stim_names:
         im = 'data/stimuli/' + stim + '.png'
         image = PIL.Image.open(im)
@@ -40,14 +42,15 @@ def add_dominant_HSV_values(df):
         counts, bins = scipy.histogram(vecs, len(codes))
         index_max = np.argpartition(counts, 1)[1]
         peak = codes[index_max]
-        hsv = colorsys.rgb_to_hsv(*[v / 255 for v in peak])
-        H.append(hsv[0])
-        S.append(hsv[1])
-        V.append(hsv[2])
+        hsl = colorsys.rgb_to_hls(*[v / 255 for v in peak])
+        stim_hsl[stim] = hsl
+        stim_rgb[stim] = tuple([v / 255 for v in peak])
 
-    df['H'] = H
-    df['S'] = S
-    df['V'] = V
+    df['Hue'] = [stim_hsl[s][0] for s in stim_names]
+    df['Lightness'] = [stim_hsl[s][1] for s in stim_names]
+    df['Saturation'] = [stim_hsl[s][2] for s in stim_names]
+    df['RGB'] = [stim_rgb[s] for s in stim_names]
+    df['stim_rates'] = stim_rates
 
     return df
 
@@ -60,7 +63,7 @@ def get_rate(spk_times, start, stop):
 def plot_response_rates(df):
     stim_rates = df.groupby(['stim_names'])['rates'].mean()
     stim_rates.plot(kind='bar')
-    plt.title('Average Response Rates for Different Stimuli (subject s)')
+    plt.title('Average Response Rates for Different Stimuli')
     plt.ylabel('Average Response Rate (spikes/s)')
     plt.xlabel('Stimulus Name')
     return stim_rates
@@ -90,7 +93,7 @@ def plot_averaged_image(stim_rates, low, high, title):
     ax1.hist(avg_image[...,1].flatten(), 256, range=(0, 254), fc='g', histtype='step')
     ax1.hist(avg_image[...,2].flatten(), 256, range=(0, 254), fc='r', histtype='step')
     ax1.set_title('Histogram of Image Channels')
-    ax1.set_xlabel('Bins, R/G/B values')
+    ax1.set_xlabel('Bins, RGB values')
     ax1.set_ylabel('Pixel count, n')
     ax1.set_xlim(100, 254)
 
@@ -98,25 +101,19 @@ def plot_averaged_image(stim_rates, low, high, title):
 
     # return stimuli
 
-def plot_HSV_scatterplots(df):
+def plot_HSL_scatterplots(df):
     plt.style.use('ggplot')
-    plt.figure(figsize=(8, 8))
-    plt.subplot(3, 1, 1)
-    plt.scatter(df.H, df.rates)
-    plt.title('Hue vs Neural Response Rate')
-    plt.xlabel('Hue (unitless)')
-    plt.ylabel('Rate (spikes/s)')
-
-    plt.subplot(3, 1, 2)
-    plt.scatter(df.S, df.rates)
-    plt.title('Saturation vs Neural Response Rate')
-    plt.xlabel('Saturation (unitless)')
-    plt.ylabel('Rate (spikes/s)')
-
-    plt.subplot(3, 1, 3)
-    plt.scatter(df.V, df.rates)
-    plt.title('Value vs Neural Response Rate')
-    plt.xlabel('Value (unitless)')
-    plt.ylabel('Rate (spikes/s)')
+    plt.figure(figsize=(13, 13))
+    rmax = df['stim_rates'].max() + 10
+    a = 1 / rmax
+    for i, color_coord in enumerate(['Hue', 'Saturation', 'Lightness']):
+        plt.subplot(1, 3, i + 1, aspect=a)
+        plt.scatter(df[color_coord], df['stim_rates'],
+                    c=df['RGB'].tolist(), s=50, edgecolor='black')
+        plt.title(color_coord + ' vs Neural Response Rate')
+        plt.xlabel(color_coord + ' (HSL value)')
+        plt.ylabel('Rate (spikes/s)')
+        plt.xlim(-0.1, 1.1)
+        plt.ylim(0, rmax)
 
     plt.tight_layout()
